@@ -1,0 +1,422 @@
+---
+- name: Full Stack Kas RW 25
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+
+  # =====================================================
+  # DATABASE SERVER
+  # =====================================================
+  - name: Setup Database MySQL
+    block:
+
+      - name: Install MySQL
+        apt:
+          name: mysql-server
+          state: present
+          update_cache: yes
+
+      - name: Allow Remote MySQL
+        lineinfile:
+          path: /etc/mysql/mysql.conf.d/mysqld.cnf
+          regexp: '^bind-address'
+          line: 'bind-address = 0.0.0.0'
+
+      - name: Restart MySQL
+        service:
+          name: mysql
+          state: restarted
+
+      - name: Create Database dan User
+        shell: |
+          mysql -e "CREATE DATABASE IF NOT EXISTS db_kasrw;"
+
+          mysql -e "CREATE USER IF NOT EXISTS 'admin_kas'@'%' IDENTIFIED BY 'password123';"
+
+          mysql -e "GRANT ALL PRIVILEGES ON db_kasrw.* TO 'admin_kas'@'%';"
+
+          mysql -e "FLUSH PRIVILEGES;"
+
+          mysql -e "
+          USE db_kasrw;
+
+          CREATE TABLE IF NOT EXISTS transaksi (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            tanggal DATE,
+            keterangan VARCHAR(255),
+            tipe ENUM('masuk','keluar'),
+            jumlah DECIMAL(15,2)
+          );
+          "
+    when: target_node == 'database'
+
+
+  # =====================================================
+  # BACKEND SERVER
+  # =====================================================
+  - name: Setup Backend Flask
+    block:
+
+      - name: Install Backend Packages
+        apt:
+          name:
+            - python3-pip
+            - python3-flask
+            - python3-flask-cors
+            - python3-mysqldb
+          state: present
+          update_cache: yes
+
+      - name: Install mysqlclient
+        shell: pip3 install mysqlclient
+
+      - name: Create Flask App
+        copy:
+          dest: /home/vagrant/app.py
+          content: |
+            from flask import Flask, request, jsonify
+            from flask_cors import CORS
+            import MySQLdb
+            import MySQLdb.cursors
+
+            app = Flask(__name__)
+            CORS(app)
+
+            def get_db():
+                return MySQLdb.connect(
+                    host="192.168.56.11",
+                    user="admin_kas",
+                    passwd="password123",
+                    db="db_kasrw",
+                    cursorclass=MySQLdb.cursors.DictCursor
+                )
+
+            @app.route('/api/transaksi', methods=['POST'])
+            def tambah():
+
+                data = request.json
+
+                db = get_db()
+                cur = db.cursor()
+
+                cur.execute(
+                    "INSERT INTO transaksi (tanggal, keterangan, tipe, jumlah) VALUES (%s,%s,%s,%s)",
+                    (
+                        data['tanggal'],
+                        data['keterangan'],
+                        data['tipe'],
+                        data['jumlah']
+                    )
+                )
+
+                db.commit()
+                db.close()
+
+                return jsonify({
+                    "status": "sukses"
+                })
+
+
+            @app.route('/api/transaksi', methods=['GET'])
+            def transaksi():
+
+                db = get_db()
+                cur = db.cursor()
+
+                cur.execute("""
+                    SELECT
+                    DATE_FORMAT(tanggal, '%d/%m/%Y') as tanggal,
+                    keterangan,
+                    tipe,
+                    jumlah
+                    FROM transaksi
+                    ORDER BY id DESC
+                """)
+
+                hasil = cur.fetchall()
+
+                db.close()
+
+                return jsonify(hasil)
+
+
+            @app.route('/api/laporan', methods=['GET'])
+            def laporan():
+
+                db = get_db()
+                cur = db.cursor()
+
+                cur.execute("""
+                    SELECT
+                    SUM(CASE WHEN tipe='masuk' THEN jumlah ELSE 0 END) as masuk,
+                    SUM(CASE WHEN tipe='keluar' THEN jumlah ELSE 0 END) as keluar
+                    FROM transaksi
+                """)
+
+                hasil = cur.fetchone()
+
+                db.close()
+
+                masuk = float(hasil['masuk'] or 0)
+                keluar = float(hasil['keluar'] or 0)
+
+                return jsonify({
+                    "masuk": masuk,
+                    "keluar": keluar,
+                    "saldo": masuk - keluar
+                })
+
+
+            if __name__ == '__main__':
+                app.run(host='0.0.0.0', port=5000)
+
+      - name: Create Flask Service
+        copy:
+          dest: /etc/systemd/system/kasrw.service
+          content: |
+            [Unit]
+            Description=Kas RW Flask API
+            After=network.target
+
+            [Service]
+            User=vagrant
+            WorkingDirectory=/home/vagrant
+            ExecStart=/usr/bin/python3 /home/vagrant/app.py
+            Restart=always
+
+            [Install]
+            WantedBy=multi-user.target
+
+      - name: Reload Systemd
+        shell: systemctl daemon-reload
+
+      - name: Enable Flask Service
+        shell: systemctl enable kasrw
+
+      - name: Restart Flask Service
+        shell: systemctl restart kasrw
+
+    when: target_node == 'backend'
+
+
+  # =====================================================
+  # FRONTEND SERVER
+  # =====================================================
+  - name: Setup Frontend NGINX
+    block:
+
+      - name: Install Nginx
+        apt:
+          name: nginx
+          state: present
+          update_cache: yes
+
+      - name: Create Dashboard
+        copy:
+          dest: /var/www/html/index.html
+          content: |
+            <!DOCTYPE html>
+            <html lang="id">
+            <head>
+              <meta charset="UTF-8">
+              <title>Kas Digital RW 25</title>
+
+              <style>
+
+                body{
+                  font-family: Arial;
+                  background:#f5f5f5;
+                  padding:20px;
+                }
+
+                .box{
+                  background:white;
+                  padding:20px;
+                  border-radius:10px;
+                  max-width:700px;
+                  margin:auto;
+                  box-shadow:0 0 10px rgba(0,0,0,0.1);
+                }
+
+                input,select,button{
+                  width:100%;
+                  padding:10px;
+                  margin-top:10px;
+                }
+
+                button{
+                  background:green;
+                  color:white;
+                  border:none;
+                  cursor:pointer;
+                }
+
+                table{
+                  width:100%;
+                  margin-top:20px;
+                  border-collapse:collapse;
+                }
+
+                table,th,td{
+                  border:1px solid #ddd;
+                }
+
+                th,td{
+                  padding:10px;
+                  text-align:center;
+                }
+
+                th{
+                  background:#007bff;
+                  color:white;
+                }
+
+                #saldo{
+                  color:green;
+                  font-size:30px;
+                  font-weight:bold;
+                }
+
+              </style>
+
+            </head>
+
+            <body>
+
+              <div class="box">
+
+                <h2>Kas Digital RW 25</h2>
+
+                <input type="date" id="tanggal">
+
+                <input type="text" id="keterangan" placeholder="Keterangan">
+
+                <select id="tipe">
+                  <option value="masuk">Pemasukan</option>
+                  <option value="keluar">Pengeluaran</option>
+                </select>
+
+                <input type="number" id="jumlah" placeholder="Jumlah">
+
+                <button onclick="simpan()">
+                  SIMPAN DATA
+                </button>
+
+                <h2>
+                  Total Saldo:
+                  <br>
+                  <span id="saldo">Rp 0</span>
+                </h2>
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>Tanggal</th>
+                      <th>Keterangan</th>
+                      <th>Tipe</th>
+                      <th>Jumlah</th>
+                    </tr>
+                  </thead>
+
+                  <tbody id="data"></tbody>
+
+                </table>
+
+              </div>
+
+              <script>
+
+                const api = "http://192.168.56.10:5000/api";
+
+                function load(){
+
+                  fetch(api + "/laporan")
+                  .then(res => res.json())
+                  .then(res => {
+
+                    document.getElementById('saldo').innerHTML =
+                    'Rp ' + Number(res.saldo).toLocaleString('id-ID');
+
+                  });
+
+                  fetch(api + "/transaksi")
+                  .then(res => res.json())
+                  .then(res => {
+
+                    let html = "";
+
+                    res.forEach(item => {
+
+                      html += `
+                        <tr>
+                          <td>${item.tanggal}</td>
+                          <td>${item.keterangan}</td>
+                          <td>${item.tipe}</td>
+                          <td>
+                            Rp ${Number(item.jumlah).toLocaleString('id-ID')}
+                          </td>
+                        </tr>
+                      `;
+                    });
+
+                    document.getElementById('data').innerHTML = html;
+
+                  });
+
+                }
+
+                function simpan(){
+
+                  const data = {
+
+                    tanggal:
+                    document.getElementById('tanggal').value,
+
+                    keterangan:
+                    document.getElementById('keterangan').value,
+
+                    tipe:
+                    document.getElementById('tipe').value,
+
+                    jumlah:
+                    document.getElementById('jumlah').value
+                  };
+
+                  fetch(api + "/transaksi", {
+
+                    method:'POST',
+
+                    headers:{
+                      'Content-Type':'application/json'
+                    },
+
+                    body:JSON.stringify(data)
+
+                  })
+
+                  .then(() => {
+
+                    alert("Data berhasil disimpan");
+
+                    load();
+
+                  });
+
+                }
+
+                load();
+
+              </script>
+
+            </body>
+            </html>
+
+      - name: Restart Nginx
+        service:
+          name: nginx
+          state: restarted
+
+    when: target_node == 'frontend'

@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: lelang_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: db_lelang
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data:/var/lib/mysql
+    networks:
+      - lelang_net
+
+  backend:
+    build: ./backend
+    container_name: lelang_backend
+    restart: always
+    environment:
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=db_lelang
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    networks:
+      - lelang_net
+
+  frontend:
+    build: ./frontend
+    container_name: lelang_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - lelang_net
+
+volumes:
+  db_data:
+
+networks:
+  lelang_net:
+    driver: bridge

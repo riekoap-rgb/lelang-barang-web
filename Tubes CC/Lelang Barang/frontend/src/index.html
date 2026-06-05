@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Sistem Informasi Barang Lelang</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Glow Effects -->
+  <div class="glow-bg glow-purple"></div>
+  <div class="glow-bg glow-cyan"></div>
+
+  <!-- Notification Container -->
+  <div id="notification-toast" class="toast hidden">
+    <i id="toast-icon" class="fas fa-check-circle"></i>
+    <span id="toast-message">Pesan notifikasi di sini</span>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo">
+        <i class="fas fa-gavel logo-icon"></i>
+        <span>Lelang<span class="logo-accent">Barang</span></span>
+      </div>
+      <div class="user-status" id="user-status-bar">
+        <!-- Rendered dynamically -->
+        <span class="guest-text"><i class="fas fa-user-circle"></i> Guest Mode</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- VIEW 1: AUTHENTICATION (LOGIN & REGISTER) -->
+    <section id="view-auth" class="auth-section">
+      <div class="auth-card glass">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login-btn" onclick="switchAuthTab('login')">Masuk</button>
+          <button class="auth-tab" id="tab-register-btn" onclick="switchAuthTab('register')">Daftar</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+          <h2>Selamat Datang Kembali</h2>
+          <p class="auth-subtitle">Masuk untuk mulai menawar barang impian Anda.</p>
+          
+          <div class="input-group">
+            <label for="login-username">Username</label>
+            <div class="input-wrapper">
+              <i class="fas fa-user input-icon"></i>
+              <input type="text" id="login-username" placeholder="Masukkan username Anda" required autocomplete="username">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="login-password">Password</label>
+            <div class="input-wrapper">
+              <i class="fas fa-lock input-icon"></i>
+              <input type="password" id="login-password" placeholder="Masukkan password Anda" required autocomplete="current-password">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">
+            <span>MASUK</span> <i class="fas fa-sign-in-alt"></i>
+          </button>
+          
+          <div class="demo-accounts">
+            <p><strong>Akun Demo:</strong></p>
+            <div class="demo-badges">
+              <span class="demo-badge" onclick="fillDemo('admin', 'admin123')">Admin: admin / admin123</span>
+              <span class="demo-badge" onclick="fillDemo('budi', 'budi123')">User: budi / budi123</span>
+            </div>
+          </div>
+        </form>
+
+        <!-- Register Form -->
+        <form id="register-form" class="auth-form hidden" onsubmit="handleRegister(event)">
+          <h2>Buat Akun Baru</h2>
+          <p class="auth-subtitle">Bergabung sekarang dan tawarkan barang unik Anda.</p>
+          
+          <div class="input-group">
+            <label for="register-username">Username</label>
+            <div class="input-wrapper">
+              <i class="fas fa-user input-icon"></i>
+              <input type="text" id="register-username" placeholder="Buat username unik" required autocomplete="username">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="register-password">Password</label>
+            <div class="input-wrapper">
+              <i class="fas fa-lock input-icon"></i>
+              <input type="password" id="register-password" placeholder="Buat password aman" required autocomplete="new-password">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="register-role">Pilih Peran (Role)</label>
+            <div class="input-wrapper">
+              <i class="fas fa-user-tag input-icon"></i>
+              <select id="register-role">
+                <option value="user">Pembeli (User / Bidder)</option>
+                <option value="admin">Pelelang (Admin)</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">
+            <span>DAFTAR SEKARANG</span> <i class="fas fa-user-plus"></i>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- VIEW 2: DASHBOARD (ADMIN & USER) -->
+    <section id="view-dashboard" class="dashboard-section hidden">
+      
+      <!-- Welcome Banner -->
+      <div class="welcome-banner glass">
+        <div class="welcome-text">
+          <h1 id="welcome-title">Halo, Pengguna!</h1>
+          <p id="welcome-subtitle">Jelajahi lelang yang sedang aktif hari ini.</p>
+        </div>
+        <div class="welcome-stats" id="dashboard-stats">
+          <!-- Rendered dynamically based on role -->
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        
+        <!-- Sidebar Panel: Admin controls or Info -->
+        <div class="dashboard-sidebar">
+          
+          <!-- Admin Panel: Add New Item -->
+          <div id="admin-panel" class="sidebar-card glass hidden">
+            <h3><i class="fas fa-plus-circle"></i> Tambah Barang Lelang</h3>
+            <form id="add-barang-form" onsubmit="handleAddBarang(event)">
+              <div class="input-group">
+                <label for="add-nama">Nama Barang</label>
+                <input type="text" id="add-nama" placeholder="Contoh: Vespa VBB 1964" required>
+              </div>
+              
+              <div class="input-group">
+                <label for="add-deskripsi">Deskripsi</label>
+                <textarea id="add-deskripsi" rows="3" placeholder="Deskripsikan kondisi, kelengkapan, dll." required></textarea>
+              </div>
+
+              <div class="input-group">
+                <label for="add-harga-awal">Harga Awal (Rp)</label>
+                <input type="number" id="add-harga-awal" placeholder="Contoh: 5000000" min="1000" required>
+              </div>
+
+              <div class="input-group">
+                <label for="add-durasi">Durasi Lelang (Menit)</label>
+                <input type="number" id="add-durasi" placeholder="Contoh: 120" min="1" required>
+              </div>
+
+              <button type="submit" class="btn btn-purple btn-block">
+                <i class="fas fa-save"></i> RILIS LELANG BARU
+              </button>
+            </form>
+          </div>
+
+          <!-- Quick Guidelines Card -->
+          <div class="sidebar-card glass">
+            <h3><i class="fas fa-info-circle"></i> Panduan Lelang</h3>
+            <ul class="guide-list">
+              <li><i class="fas fa-chevron-right"></i> Penawaran (bid) harus lebih tinggi dari harga lelang saat ini.</li>
+              <li><i class="fas fa-chevron-right"></i> Setelah waktu lelang habis, penawar tertinggi akan memenangkan barang.</li>
+              <li><i class="fas fa-chevron-right"></i> Admin berhak menutup lelang secara manual kapan saja.</li>
+              <li><i class="fas fa-chevron-right"></i> Harap selalu pantau riwayat tawaran secara real-time.</li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- Main Panel: Auction Items Grid -->
+        <div class="dashboard-content">
+          <div class="content-header">
+            <h2><i class="fas fa-gavel"></i> Daftar Barang Lelang</h2>
+            <button class="btn btn-outline btn-sm" onclick="fetchBarang()">
+              <i class="fas fa-sync-alt"></i> Segarkan Data
+            </button>
+          </div>
+          
+          <div id="barang-container" class="barang-grid">
+            <!-- Loading State -->
+            <div class="loading-state">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              <p>Memuat data barang lelang...</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL: Bid History -->
+  <div id="history-modal" class="modal hidden">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3 id="modal-title">Riwayat Penawaran</h3>
+        <button class="close-btn" onclick="closeHistoryModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-item-info" class="modal-item-info">
+          <!-- Rendered dynamically -->
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Penawar</th>
+                <th>Tawaran (IDR)</th>
+                <th>Waktu</th>
+              </tr>
+            </thead>
+            <tbody id="modal-history-rows">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>&copy; 2026 Sistem Informasi Lelang Barang. Dibuat dengan <i class="fas fa-heart text-purple"></i> & Docker.</p>
+    </div>
+  </footer>
+
+  <!-- App Script -->
+  <script src="app.js"></script>
+</body>
+</html>
