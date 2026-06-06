@@ -113,7 +113,8 @@ Buka terminal, navigasi ke direktori `backend`, dan jalankan aplikasi:
 cd backend
 python app.py
 ```
-Server akan berjalan pada `http://localhost:5000`.
+Server akan berjalan pada http://localhost/api/barang.
+Membuka Web http://localhost/
 
 ### 2. Akses Frontend
 Buka browser Anda dan akses file berikut:
